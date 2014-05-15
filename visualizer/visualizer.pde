@@ -13,12 +13,13 @@ String [][] csv;
 int selectSubject,selectX,selectY;
 int s=15;
 int xsize,ysize;  
-int posScale=100000;
+int posScale=1000;
 int maxX=0; int maxY=0;
 int dly;
 int windowX=1000;
 int windowY=800;
 int buffer=100;
+final int constRadius = s;
 
 //You will need to change sahara.csv to your own data file. 
 // Use the full path OR put the file inside the visulizer folder
@@ -26,7 +27,10 @@ void setup()
 {
   size(300,300);
   createUI();
-  lines=loadStrings("sahara.csv");
+  //lines=loadStrings("saharaAllPCA.csv");
+  //lines=loadStrings("saharaTopPCA.csv");
+  //lines=loadStrings("escapeAllPCA.csv");
+  lines=loadStrings("escapeTopPCA.csv");
   selectSubject=5;
   selectX=1;
   selectY=1;
@@ -73,7 +77,7 @@ void createUI()
   ;
 
   //dropdown list for X source  
-  d1 = cp5.addDropdownList("Xlist")
+  d1 = cp5.addDropdownList("xlist")
           .setPosition(d1x, d1y)
           .setBackgroundColor(color(190))
           .setItemHeight(20)
@@ -91,7 +95,7 @@ void createUI()
   d1.addItem("Component 4",4);
   
   //dropdown list for Y source  
-  d2 = cp5.addDropdownList("Ylist")
+  d2 = cp5.addDropdownList("ylist")
           .setPosition(d2x, d2y)
           .setBackgroundColor(color(190))
           .setItemHeight(20)
@@ -211,6 +215,8 @@ void UIText()
 
 public void compileCSV()
 {
+    maxX=0;
+    maxY=0;
     //read csv file
     //calculate max width of csv file
     int csvLength=0;
@@ -266,13 +272,11 @@ void draw()
   UIText();
 }
 
-
 public class PlayFrame extends Frame
 {
   PlayApp app;
   public PlayFrame()
   {
-    //setBounds(0,0,xsize+15,ysize+38);
     setBounds(0,0,windowX,windowY);
     app=new PlayApp();
     add(app);
@@ -288,7 +292,7 @@ public class PlayFrame extends Frame
 
 public class PlayApp extends PApplet
 {
-  int i;
+  int cIndex; //circle index
   Circle[] circles;
   float circleR;
   Boundary innerBox;
@@ -306,46 +310,51 @@ public class PlayApp extends PApplet
   
   public void setup()
   {  
-    //create circles
     circles = new Circle[csv.length];
     emotion_map = new HashMap<Integer, String>();
     Map<Integer,Integer> occurence_map = new HashMap<Integer,Integer>();
     color_map = fillOccurenceMap(occurence_map);
+    
     fillEmotionMap(emotion_map);
     colorMode(HSB,color_map.size(),100,100);
-    //println(color_map.size());
-    //int maxX=0;
-    //int maxY=0;
+    
     setBoundingBox();
     setPosScale();
-    println("x pos" + posScaleX);
-    for(int i=0;i<csv.length;i++)
+    
+   // maxX+=off+s;
+   // maxY+=off+s;
+    
+    for(cIndex=0;cIndex<csv.length;cIndex++)
     {
       circleR=s;
-      int emotion=int(csv[i][1]);
-      int x=abs(int(float(csv[i][selectX+1])*posScale*posScaleX+off+circleR));
-      int y=abs(int(float(csv[i][selectY+1])*posScale*posScaleY+off+circleR));
-      //float pred=float(csv[i][6]);
-      //if(pred!=2) circleR*=pred;
-      if(x<=circleR+off) x=int(circleR)+off;
-      if(y<=int(circleR+off)) y=int(circleR)+off;
+      int emotion=int(csv[cIndex][1]);
+      
+      //raw X and Y from csv file
+      float xRaw = float(csv[cIndex][selectX+1]);
+      float yRaw = float(csv[cIndex][selectY+1]);
+      
+      //adjusted x and y by multiplying by posScale to scale up and multiplying by posScaleX and Y to scale within bounds.
+      float xAdjust = abs(xRaw) * posScale * posScaleX + off + circleR;
+      float yAdjust = abs(yRaw) * posScale * posScaleY + off + circleR;
+      
+      //cast to ints
+      int x = (int)xAdjust;
+      int y = (int)yAdjust;
+      
+      println("X: " + x);
+      println("Y: " + y);
+      println();
       color circleCol=color(color_map.get((Integer)emotion),50,75);
       String circleName=emotion_map.get(emotion);
       Circle circle = new Circle(x,y,circleR,circleCol,circleName,'a');
-      circles[i]=circle;
+      circles[cIndex]=circle;
     }
-    i=0;
+    cIndex=0;
   }
   public void setPosScale()
   {
-    if(maxX>innerBox.xdiff())
-    {
-      posScaleX=innerBox.xdiff()/float(maxX);
-    }
-    if(maxY>innerBox.ydiff())
-    {
-      posScaleY=innerBox.ydiff()/float(maxY);
-    }
+      posScaleX=(innerBoundx-s*2)/float(maxX + off + s*2);
+      posScaleY=(innerBoundy-s*2)/float(maxY + off + s*2);
   }
   
   public void setBoundingBox()
@@ -360,20 +369,34 @@ public class PlayApp extends PApplet
     colorMode(RGB,255,255,255);
     background(200);
     drawBoundingBox();
-    //add color key bottom (left?) of rectangle
+    //add color key bottom left of rectangle
     drawKey();
-    //fix circles to stay within bounds of rectangle
-    //print current emotion data in bottom right? (maybe)
-    for(int j=0;j<i;j++)
+    
+   
+    for(int j=0;j<cIndex;j++)
     {
         circles[j].add();
     }
-    i++;
-    if(i==circles.length)
-      noLoop();
-    //delay(dly);
-    //println(innerBox.xl);
+   // fill(circles[cIndex].col);
+    color col=circles[cIndex].col;
+    fill(col);
+    ellipse(circles[cIndex].x,circles[cIndex].y,circles[cIndex].r*2,circles[cIndex].r*2);
+      
+    cIndex++;
     
+    if(cIndex==circles.length)
+    {
+      noLoop();
+    }
+    delay(dly);
+  }
+  
+  public void resizeCircles(Circle[] cir) //resizes all circles when the size is changed
+  {
+    for(int j=0;j<cir.length;j++)
+    {
+      cir[j].r=s;
+    }
   }
   
   /* 
@@ -385,29 +408,37 @@ public class PlayApp extends PApplet
   public void drawBoundingBox()
   {
     fill(230);
-    int off=15;
     rect(off,off,innerBoundx,innerBoundy); //center this rect
+    
+    textSize(12);
+    fill(0);
+    text("Subject: " + selectSubject + "      X: Component " + selectX + "      Y: Component " + selectY,15,12);
   }
   
-  //color to emotion key drawn here.
+  //color to emotion key drawn here. resizes based on size of color map
   public void drawKey()
   {
-    Boundary keyBound = new Boundary(innerBox.xl,600,innerBox.yh+15,40);
-    rect(keyBound.xl,keyBound.yl,keyBound.xh,keyBound.yh);
+    fill(230);
+    int keyBoundX, keyBoundY;
+    keyBoundY=40;
+    keyBoundX=color_map.size()*150;
+    Boundary keyBound = new Boundary(innerBox.xmin,keyBoundX,innerBox.ymax+15,keyBoundY);
+    rect(keyBound.xmin,keyBound.ymin,keyBound.xmax,keyBound.ymax);
 
     colorMode(HSB,color_map.size(),100,100);
     int i=10;
     for (Integer key : color_map.keySet()) 
     {
       fill(color_map.get(key),50,75);
-      rect(keyBound.xl+i,keyBound.yl+10,30,15);
-      println(key);
-      //println(color_map.get(key));
-      
+      rect(keyBound.xmin+i,keyBound.ymin+10,30,15);
       textSize(15);
-      text(emotion_map.get(key),keyBound.xl+i+37,keyBound.yl+23);
+      text(emotion_map.get(key),keyBound.xmin+i+37,keyBound.ymin+23);
       i+=150;
     }
+    
+    //textSize(10);
+   // fill(0);
+   // text("Subject " + Subject, 50,50);
   }
   
   Map<Integer,Integer> fillOccurenceMap(Map<Integer,Integer> m)
@@ -430,8 +461,6 @@ public class PlayApp extends PApplet
       if(!color_map.containsKey(key))
       {
         color_map.put(key,c);
-        println("key: ",key);
-        println("c: ", c);
         c++;
       }
     }
@@ -469,25 +498,25 @@ public class PlayApp extends PApplet
     m.put(27,"mad");
   }
   
-  //object to hold the xlow, xhigh, ylow and yhigh values of a boundary box
+  //object to hold the xminow, xmaxigh, ymaxow and ymaxigh values of a boundary box
   class Boundary 
   {
-    int xl, xh, yl, yh;
+    int xmin, xmax, ymin, ymax;
     Boundary(int a, int b, int c, int d)
     {
-        xl=a;
-        xh=b;
-        yl=c;
-        yh=d;
+        xmin=a;
+        xmax=b;
+        ymin=c;
+        ymax=d;
     }
     
     float xdiff()
     {
-      return xh-xl;
+      return xmax-xmin;
     }
     float ydiff()
     {
-      return yh-yl;
+      return ymax-ymin;
     }
   }
   
@@ -498,7 +527,7 @@ public class PlayApp extends PApplet
     color col;
     String name;
     char code;
-    
+    boolean focus;
     Circle(int x_, int y_, float r_, color c_, String n_, char cd_)
     {
       x=x_;
@@ -507,6 +536,7 @@ public class PlayApp extends PApplet
       col=c_;
       name=n_;
       code=cd_;
+      focus=false;
     }
     void xy(int x_, int y_)
     {
@@ -515,9 +545,15 @@ public class PlayApp extends PApplet
     }
     void add()
     {
+      float radius=r;
+      if(focus=true)
+      {
+        radius=r*2;
+      }
       fill(col);
       ellipse(x,y,r,r);
-     // println(name);
+  //    println("Radius: " + radius);
+   //   println("Focus: " + focus);
     }
   }
   
