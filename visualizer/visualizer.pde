@@ -8,29 +8,32 @@ ControlP5 cp5;
 int Subject=5;
 int Speed=1;
 int Size=1;
-String[] lines;
+String [] lines;
 String [][] csv;
+float [][] subjectData;
 int selectSubject,selectX,selectY;
 int s=15;
 int xsize,ysize;  
-int posScale=1000;
-int maxX=0; int maxY=0;
+float posScale=1000000;
 int dly;
 int windowX=1000;
 int windowY=800;
 int buffer=100;
-final int constRadius = s;
+int maxSubject, minSubject, subjectRange;
+float maxX, maxY, minX, minY, xInc, yInc;
+int numComponents;
+int secondWindowOffset=15;
 
-//You will need to change sahara.csv to your own data file. 
-// Use the full path OR put the file inside the visulizer folder
+//You will need to change file name to your own file. 
+// Use the full path OR put the file inside the visualizer folder
 void setup()
 {
+  //lines=loadStrings("saharaTopPCA.csv");
+  lines=loadStrings("escapeTopPCA.csv");
+  
+  compileCSV();
   size(300,300);
   createUI();
-  //lines=loadStrings("saharaAllPCA.csv");
-  //lines=loadStrings("saharaTopPCA.csv");
-  //lines=loadStrings("escapeAllPCA.csv");
-  lines=loadStrings("escapeTopPCA.csv");
   selectSubject=5;
   selectX=1;
   selectY=1;
@@ -89,10 +92,10 @@ void createUI()
   d1.captionLabel().style().marginTop=3;
   d1.captionLabel().style().marginLeft=3;
   d1.valueLabel().style().marginTop=3;
-  d1.addItem("Component 1",1);
-  d1.addItem("Component 2",2);
-  d1.addItem("Component 3",3);
-  d1.addItem("Component 4",4);
+  for(int i=0;i<numComponents;i++)
+  {
+    d1.addItem("Component " + (i+1), i+2);
+  }
   
   //dropdown list for Y source  
   d2 = cp5.addDropdownList("ylist")
@@ -107,18 +110,18 @@ void createUI()
   d2.captionLabel().style().marginTop=3;
   d2.captionLabel().style().marginLeft=3;
   d2.valueLabel().style().marginTop=3;
-  d2.addItem("Component 1",1);
-  d2.addItem("Component 2",2);
-  d2.addItem("Component 3",3);
-  d2.addItem("Component 4",4);
+  for(int i=0;i<numComponents;i++)
+  {
+    d2.addItem("Component " + (i+1), i+2);
+  }
   d2.scroll(0);
   
   //Subject slider
   cp5.addSlider("Subject")
     .setPosition(subjectx,subjecty)
     .setSize(232,15)
-    .setRange(5,42)
-    .setNumberOfTickMarks(38)
+    .setRange(minSubject,maxSubject)
+    .setNumberOfTickMarks(subjectRange)
     .showTickMarks(false)
     ;
     
@@ -181,7 +184,7 @@ void controlEvent(ControlEvent theEvent)
 
 public void Play(int theValue)
 {
-  compileCSV();
+  loadSelected();
   Play = new PlayFrame();
 }
 
@@ -213,8 +216,10 @@ void UIText()
   text("mode",35,258);
 }
 
+//load the csv into a 2d array
 public void compileCSV()
 {
+    maxSubject=1;
     maxX=0;
     maxY=0;
     //read csv file
@@ -222,21 +227,16 @@ public void compileCSV()
     int csvLength=0;
     int substrlen=0;
     int csvWidth=0;
-    if(selectSubject<10) substrlen=1;
-    else
-      substrlen=2;
     for (int i=0; i < lines.length; i++) 
     {
-        if(lines[i].substring(0,substrlen).equals(Integer.toString(selectSubject)))
-        {
-          csvLength++;
-        }
+        csvLength++;
         String [] chars=split(lines[i],',');
         if (chars.length>csvWidth)
         {
           csvWidth=chars.length;
         }
     }
+    println(csvLength+ " , " + csvWidth);
     //create csv array based on # of rows and columns in csv file
     csv = new String [csvLength][csvWidth];
   
@@ -244,26 +244,123 @@ public void compileCSV()
     int i2=0;
     for (int i=0; i < lines.length; i++) 
     {
-      if(lines[i].substring(0,substrlen).equals(Integer.toString(selectSubject)))
+      String [] temp = new String [lines.length];
+      temp= split(lines[i], ',');
+      for (int j=0; j < temp.length; j++)
       {
-        String [] temp = new String [lines.length];
-        temp= split(lines[i], ',');
+        csv[i2][j]=temp[j];
+      }
+      i2++;
+    }
+    
+    //get the min and max subject from the data for the size of the subject slider
+    minSubject=int(csv[0][0]);
+    for(int i=0;i<csvLength;i++)
+      {
+        if(int(csv[i][0])>=maxSubject)
+        {
+          maxSubject=int(csv[i][0]);
+        }
+        if(int(csv[i][0])<=minSubject)
+        {
+          minSubject=int(csv[i][0]);
+        }
+    }
+    subjectRange=maxSubject-minSubject+1;
+    println("max subject : " + maxSubject);
+    println("min subject : " + minSubject);
+    println("subject range : " + subjectRange);
+    
+    //number of components in the data for the component dropdown
+    numComponents = csvWidth-3;
+}
+
+//creates a 2d array (subjectData) from the csv data with only the selected subject's data
+public void loadSelected()
+{
+    int csvLength=0;
+    int csvWidth = csv[0].length;
+    for(int i=0;i<csv.length;i++)
+    {
+      if(int(csv[i][0])==selectSubject)
+      {
+        csvLength++;
+      }
+    }
+    int i2=0;
+    subjectData = new float [csvLength][4];
+    for (int i=0; i < csv.length; i++) 
+    {
+      if(int(csv[i][0])==selectSubject)
+      {
+        String [] temp = csv[i];
         for (int j=0; j < temp.length; j++)
         {
-          csv[i2][j]=temp[j];
+            if(j<2)
+            {
+              subjectData[i2][j]=float(temp[j]);
+            }
+            else if(j==selectX)
+            {
+              subjectData[i2][2]=float(temp[j])*posScale;
+            }
+            else if(j==selectY)
+            { 
+              subjectData[i2][3]=float(temp[j])*posScale;
+            }
         }
         i2++;
       }
     }
-    for(int i=0;i<csv.length;i++)
+
+    maxX=0;
+    maxY=0;
+    minX=0;
+    minY=0;
+    for(int i=0;i<subjectData.length;i++)
     {
-      int x=abs(int(float(csv[i][selectX+1])*posScale));
-      int y=abs(int(float(csv[i][selectY+1])*posScale));
-      if(x>maxX) maxX=x;
-      if(y>maxY) maxY=y;
+
+      if(subjectData[i][2]>maxX)
+      {
+        maxX = subjectData[i][2];
+      }
+      if(subjectData[i][2]<minX)
+      {
+        minX=subjectData[i][2];
+      }
+      if(subjectData[i][3]>maxY)
+      {
+        maxY=subjectData[i][3];
+      }
+      if(subjectData[i][3]<minY)
+      {
+        minY=subjectData[i][3];
+      }
     }
-    xsize=maxX+s;
-    ysize=maxY+s;
+    
+    //Scale up to positive range
+    maxX+=abs(minX);
+    maxY+=abs(minY);
+    for(int i=0;i<subjectData.length;i++)
+    { 
+      //scale up to positive if necessary
+      subjectData[i][2]+=abs(minX);
+      subjectData[i][3]+=abs(minY);
+    }
+    
+    println("maxX " + maxX);
+    println("minX " + minX);
+    println("maxY " + maxY);
+    println("minY " + minY);
+    
+    PrintWriter output = createWriter("debug.txt");
+    for(int i=0;i<subjectData.length;i++)
+    {        
+      output.print(subjectData[i][2] + " , " + subjectData[i][3]);
+      output.println();
+    }
+    output.close();
+
 }
 
 void draw()
@@ -272,6 +369,7 @@ void draw()
   UIText();
 }
 
+//second window
 public class PlayFrame extends Frame
 {
   PlayApp app;
@@ -298,7 +396,7 @@ public class PlayApp extends PApplet
   Boundary innerBox;
   int innerBoundx=950;
   int innerBoundy=680;
-  int off=15;
+  int off=secondWindowOffset;
   float posScaleX=1;
   float posScaleY=1;
   Map<Integer,Integer> color_map;
@@ -310,7 +408,7 @@ public class PlayApp extends PApplet
   
   public void setup()
   {  
-    circles = new Circle[csv.length];
+    circles = new Circle[subjectData.length];
     emotion_map = new HashMap<Integer, String>();
     Map<Integer,Integer> occurence_map = new HashMap<Integer,Integer>();
     color_map = fillOccurenceMap(occurence_map);
@@ -321,29 +419,23 @@ public class PlayApp extends PApplet
     setBoundingBox();
     setPosScale();
     
-   // maxX+=off+s;
-   // maxY+=off+s;
-    
-    for(cIndex=0;cIndex<csv.length;cIndex++)
+    for(cIndex=0;cIndex<subjectData.length;cIndex++)
     {
       circleR=s;
-      int emotion=int(csv[cIndex][1]);
+      int emotion=int(subjectData[cIndex][1]);
       
       //raw X and Y from csv file
-      float xRaw = float(csv[cIndex][selectX+1]);
-      float yRaw = float(csv[cIndex][selectY+1]);
+      float xRaw = subjectData[cIndex][2];
+      float yRaw = subjectData[cIndex][3];
       
-      //adjusted x and y by multiplying by posScale to scale up and multiplying by posScaleX and Y to scale within bounds.
-      float xAdjust = abs(xRaw) * posScale * posScaleX + off + circleR;
-      float yAdjust = abs(yRaw) * posScale * posScaleY + off + circleR;
+      //adjusted x and y to fit within bounds of the drawing space
+      float xAdjust = xRaw * posScaleX + off + circleR;
+      float yAdjust = yRaw * posScaleY + off + circleR;
       
       //cast to ints
       int x = (int)xAdjust;
       int y = (int)yAdjust;
       
-      println("X: " + x);
-      println("Y: " + y);
-      println();
       color circleCol=color(color_map.get((Integer)emotion),50,75);
       String circleName=emotion_map.get(emotion);
       Circle circle = new Circle(x,y,circleR,circleCol,circleName,'a');
@@ -353,8 +445,9 @@ public class PlayApp extends PApplet
   }
   public void setPosScale()
   {
-      posScaleX=(innerBoundx-s*2)/float(maxX + off + s*2);
-      posScaleY=(innerBoundy-s*2)/float(maxY + off + s*2);
+    //scale X and Y to fit within bounds of the window
+    posScaleX=(innerBoundx - s*2)/(maxX);
+    posScaleY=(innerBoundy - s*2)/(maxY);
   }
   
   public void setBoundingBox()
@@ -372,7 +465,6 @@ public class PlayApp extends PApplet
     //add color key bottom left of rectangle
     drawKey();
     
-   
     for(int j=0;j<cIndex;j++)
     {
         circles[j].add();
@@ -380,8 +472,10 @@ public class PlayApp extends PApplet
    // fill(circles[cIndex].col);
     color col=circles[cIndex].col;
     fill(col);
-    ellipse(circles[cIndex].x,circles[cIndex].y,circles[cIndex].r*2,circles[cIndex].r*2);
-      
+    if(cIndex<circles.length-1)
+    {
+      ellipse(circles[cIndex].x,circles[cIndex].y,circles[cIndex].r*2,circles[cIndex].r*2);
+    }
     cIndex++;
     
     if(cIndex==circles.length)
@@ -389,14 +483,6 @@ public class PlayApp extends PApplet
       noLoop();
     }
     delay(dly);
-  }
-  
-  public void resizeCircles(Circle[] cir) //resizes all circles when the size is changed
-  {
-    for(int j=0;j<cir.length;j++)
-    {
-      cir[j].r=s;
-    }
   }
   
   /* 
@@ -412,7 +498,7 @@ public class PlayApp extends PApplet
     
     textSize(12);
     fill(0);
-    text("Subject: " + selectSubject + "      X: Component " + selectX + "      Y: Component " + selectY,15,12);
+    text("Subject: " + selectSubject + "      X: Component " + (selectX-1) + "      Y: Component " + (selectY-1) ,15,12);
   }
   
   //color to emotion key drawn here. resizes based on size of color map
@@ -443,15 +529,15 @@ public class PlayApp extends PApplet
   
   Map<Integer,Integer> fillOccurenceMap(Map<Integer,Integer> m)
   {
-    for(int i=0;i<csv.length;i++)
+    for(int i=0;i<subjectData.length;i++)
     {
-      if(!m.containsKey(csv[i][1]))
+      if(!m.containsKey(subjectData[i][1]))
       {
-        m.put(((Integer)int(csv[i][1])),(Integer)1);
+        m.put(((Integer)int(subjectData[i][1])),(Integer)1);
       }
       else
       {
-        m.put((Integer)int(csv[i][1]),m.get((Integer)int(csv[i][1])));
+        m.put((Integer)int(subjectData[i][1]),m.get((Integer)int(subjectData[i][1])));
       }
     }
     Map<Integer,Integer>color_map=new HashMap<Integer,Integer>();
