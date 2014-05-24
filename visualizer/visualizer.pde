@@ -1,10 +1,13 @@
 import controlP5.*;
 import java.awt.Frame;
+import java.awt.BorderLayout;
 import java.util.*;
 DropdownList d1,d2;
 ListBox l1,l2;
 PlayFrame Play;
+loadFrame load;
 ControlP5 cp5;
+ControlP5 c2;
 int Subject=5;
 int Speed=1;
 int Size=1;
@@ -23,20 +26,156 @@ int maxSubject, minSubject, subjectRange;
 float maxX, maxY, minX, minY, xInc, yInc;
 int numComponents;
 int secondWindowOffset=15;
+String fileSelected = new String();
+String filename;
+String path;
 
-//You will need to change file name to your own file. 
-// Use the full path OR put the file inside the visualizer folder
 void setup()
 {
-  //lines=loadStrings("saharaTopPCA.csv");
-  lines=loadStrings("escapeTopPCA.csv");
+  path=sketchPath("");
+  load = new loadFrame();
+  
+  //initialize controller
+  cp5 = new ControlP5(this);
+
+  //wait until file has been selected
+  synchronized(fileSelected) 
+  {
+      try {
+          // Calling wait() will block this thread until another thread
+          // calls notify() on the object.
+          fileSelected.wait();
+      } 
+      catch (InterruptedException e) {
+      }
+  }
+          
+  lines=loadStrings(filename);
+  println(fileSelected);
   
   compileCSV();
   size(300,300);
   createUI();
+  
+  //default selections
   selectSubject=5;
   selectX=1;
   selectY=1;
+  
+}
+
+//file selection window
+public class loadFrame extends Frame
+{
+  LoadApp app;
+  public loadFrame()
+  {
+    setBounds(0,0,250,150);
+    app = new LoadApp();
+    add(app);
+    app.init();
+    show();
+  }
+  
+  public LoadApp getApp()
+  {
+    return app;
+  }
+}
+
+public class LoadApp extends PApplet
+{
+  boolean entered=false;
+  boolean invalid=false;
+  
+  public LoadApp()
+  {
+  }
+  
+  void setup()
+  {
+    c2 = new ControlP5(this);
+    PFont font = createFont("arial",12);
+    
+    c2.addTextfield("Input")
+      .setSize(150,25)
+      .setPosition(42,30)
+      .setFont(font)
+      .setText("example.csv")
+      .setFocus(true)
+      .getCaptionLabel().hide()
+      ;
+      
+    c2.addButton("Load")
+      .setSize(60,20)
+      .setPosition(42,75)
+      .setValue(0)
+      .getCaptionLabel()
+      .set("Load File")
+      .toUpperCase(false)
+      .setFont(font)
+      ;
+  }
+  
+  boolean fileExists(String name)
+  {
+    String f[] =loadStrings(name);
+    if(f==null)
+      return false;
+    return true;
+  }
+  
+  void displayInvalidText()
+  {
+    textSize(12);
+    fill(255,0,0);
+    text("Not a valid file",42,70);
+  }
+  
+  void draw()
+  {
+    background(150,180,200);
+    if(invalid)
+      displayInvalidText();
+    fill(255);
+    textSize(15);
+    text("Enter file name:",42,25);
+    if(c2.get(Button.class,"Load").isPressed())
+    {
+      entered=true;
+    }
+    if(entered) //button was pressed
+    {
+      noLoop();
+      invalid=false;
+      filename = c2.get(Textfield.class,"Input").getText();
+      filename=path+filename;
+      if(fileExists(filename)) //file name is valid
+      {
+        synchronized(fileSelected)
+        {
+          fileSelected.notify();
+        }
+        load.setVisible(false);
+        noLoop();
+      }
+      else //invalid file name
+      {
+        entered=false;
+        invalid=true;
+        loop();
+      }
+    }
+   // noLoop();
+  /*  if(c2.get(Button.class,"Load").Value==1)
+    {
+   //   loop();
+      println("looping");
+      c2.get(Button.class,"Load").isPressed();
+    }*/
+    //load.setVisible(false);
+    //text(c2.get(Textfield.class,"input").getText(), 360,130);
+  }
 }
 
 void createUI()
@@ -50,8 +189,6 @@ void createUI()
   modex=34; modey=265;
   speedx=185; speedy=215;
   sizex=34; sizey=215;
-  //initialize controller
-  cp5 = new ControlP5(this);
   
   //set font
   cp5.setControlFont(new ControlFont(createFont("Arial", 13), 13));
