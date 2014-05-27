@@ -28,7 +28,12 @@ int numComponents;
 int secondWindowOffset=15;
 String fileSelected = new String();
 String filename;
+String filepath;
 String path;
+boolean isStopped = false;
+boolean isPause = false;
+String unpauseCheck = new String();
+String stopCheck = new String();
 
 void setup()
 {
@@ -149,8 +154,8 @@ public class LoadApp extends PApplet
       noLoop();
       invalid=false;
       filename = c2.get(Textfield.class,"Input").getText();
-      filename=path+filename;
-      if(fileExists(filename)) //file name is valid
+      filepath=path+filename;
+      if(fileExists(filepath)) //file name is valid
       {
         synchronized(fileSelected)
         {
@@ -181,11 +186,13 @@ public class LoadApp extends PApplet
 void createUI()
 {
   //UI positioning variables
-  int d1x,d1y,d2x,d2y,subjectx,subjecty,playx,playy,modex,modey,speedx,speedy,sizex,sizey;
+  int d1x,d1y,d2x,d2y,subjectx,subjecty,playx,playy,pausex,pausey,stopx,stopy,modex,modey,speedx,speedy,sizex,sizey;
   d1x=34; d1y=70;
   d2x=164; d2y=70;
   subjectx=34; subjecty=175;
-  playx=185; playy=255;
+  playx=145; playy=255;
+  pausex=195; pausey=255;
+  stopx=245; stopy=255;
   modex=34; modey=265;
   speedx=185; speedy=215;
   sizex=34; sizey=215;
@@ -196,12 +203,38 @@ void createUI()
   //play button
   cp5.addButton("Play")
     .setBroadcast(false)
-    .setSize(70,30)
+    .setSize(45,30)
     .setPosition(playx,playy)
     .setBroadcast(true)
-    
     ;
+    
   cp5.getController("Play")
+    .getCaptionLabel()
+    .toUpperCase(false)
+    ;
+    
+  //pause button
+  cp5.addButton("Pause")
+    .setBroadcast(false)
+    .setSize(45,30)
+    .setPosition(pausex,pausey)
+    .setBroadcast(true)
+    ;
+    
+  cp5.getController("Pause")
+    .getCaptionLabel()
+    .toUpperCase(false)
+    ;
+    
+  //stop button
+  cp5.addButton("Stop")
+    .setBroadcast(false)
+    .setSize(45,30)
+    .setPosition(stopx,stopy)
+    .setBroadcast(true)
+    ;
+    
+  cp5.getController("Stop")
     .getCaptionLabel()
     .toUpperCase(false)
     ;
@@ -321,8 +354,42 @@ void controlEvent(ControlEvent theEvent)
 
 public void Play(int theValue)
 {
-  loadSelected();
-  Play = new PlayFrame();
+  if(!isPause)
+  {
+    isStopped=false;
+    loadSelected();
+    Play = new PlayFrame();
+  }
+  else
+  {
+    synchronized(unpauseCheck)
+    {
+      unpauseCheck.notify();
+      isPause=false;
+    }
+  }
+}
+
+public void Pause(int theValue)
+{
+  isPause=true;
+}
+
+public void Stop(int theValue)
+{
+  isStopped=true;
+  if(isPause)
+  {
+    synchronized(unpauseCheck)
+    {
+      unpauseCheck.notify();
+      isPause=false;
+    }
+  }
+  synchronized(stopCheck)
+  {
+    stopCheck.notify();
+  }
 }
 
 public void Subject(int theValue)
@@ -347,6 +414,8 @@ public void Size(int theValue)
 
 void UIText()
 {
+  textSize(11);
+  text("file loaded: " + filename,5,10);
   textSize(15);
   text("x component",35,37);
   text("y component",165,37);
@@ -416,7 +485,6 @@ public void compileCSV()
 public void loadSelected()
 {
     int csvLength=0;
-    int csvWidth = csv[0].length;
     for(int i=0;i<csv.length;i++)
     {
       if(int(csv[i][0])==selectSubject)
@@ -594,21 +662,18 @@ public class PlayApp extends PApplet
   
   public void draw()
   {
-    int xcenter=(windowX)/2;
-    int ycenter=(windowY)/2;
     colorMode(RGB,255,255,255);
     background(200);
     drawBoundingBox();
-    //add color key bottom left of rectangle
     drawKey();
     
     for(int j=0;j<cIndex;j++)
     {
         circles[j].add();
     }
-   // fill(circles[cIndex].col);
     color col=circles[cIndex].col;
     fill(col);
+    
     if(cIndex<circles.length-1)
     {
       ellipse(circles[cIndex].x,circles[cIndex].y,circles[cIndex].r*2,circles[cIndex].r*2);
@@ -616,9 +681,44 @@ public class PlayApp extends PApplet
     cIndex++;
     
     if(cIndex==circles.length)
+    {       
+      synchronized(stopCheck) 
+      {
+          try {
+              // Calling wait() will block this thread until another thread
+              // calls notify() on the object.
+              stopCheck.wait();
+          } 
+          catch (InterruptedException e) {
+          }
+      }
+      noLoop();
+      if(isStopped)
+      {
+        Play.setVisible(false);
+      }
+    }
+    
+    if(isPause)
+    {
+       synchronized(unpauseCheck) 
+      {
+          try {
+              // Calling wait() will block this thread until another thread
+              // calls notify() on the object.
+              unpauseCheck.wait();
+          } 
+          catch (InterruptedException e) {
+          }
+      }
+    }
+    
+    if(isStopped)
     {
       noLoop();
+      Play.setVisible(false);
     }
+    
     delay(dly);
   }
   
@@ -627,7 +727,7 @@ public class PlayApp extends PApplet
   If you want to change the size of this you will have to reposition it. I reccomend not changing it.
   If you do change it, innerBoundx and innerBoundy are global variables within the PlayApp that control 
   the size of the box.
-  */
+  */ 
   public void drawBoundingBox()
   {
     fill(230);
@@ -635,7 +735,7 @@ public class PlayApp extends PApplet
     
     textSize(12);
     fill(0);
-    text("Subject: " + selectSubject + "      X: Component " + (selectX-1) + "      Y: Component " + (selectY-1) ,15,12);
+    text("Source: " + filename + "      Subject: " + selectSubject + "      X: Component " + (selectX-1) + "      Y: Component " + (selectY-1) ,15,12);
   }
   
   //color to emotion key drawn here. resizes based on size of color map
@@ -750,7 +850,6 @@ public class PlayApp extends PApplet
     color col;
     String name;
     char code;
-    boolean focus;
     Circle(int x_, int y_, float r_, color c_, String n_, char cd_)
     {
       x=x_;
@@ -759,7 +858,6 @@ public class PlayApp extends PApplet
       col=c_;
       name=n_;
       code=cd_;
-      focus=false;
     }
     void xy(int x_, int y_)
     {
@@ -768,11 +866,6 @@ public class PlayApp extends PApplet
     }
     void add()
     {
-      float radius=r;
-      if(focus=true)
-      {
-        radius=r*2;
-      }
       fill(col);
       ellipse(x,y,r,r);
   //    println("Radius: " + radius);
